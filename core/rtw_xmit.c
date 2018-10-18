@@ -4366,18 +4366,18 @@ static void do_queue_select(_adapter	*padapter, struct pkt_attrib *pattrib)
  #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 24))
 s32 rtw_monitor_xmit_entry(struct sk_buff *skb, struct net_device *ndev)
 {
+	int ret = 0;
+	int rtap_len;
+	int qos_len = 0;
+	int dot11_hdr_len = 24;
+	int snap_len = 6;
+	unsigned char *pdata;
 	u16 frame_ctl;
-	struct ieee80211_radiotap_header rtap_hdr;
+	unsigned char src_mac_addr[6];
+	unsigned char dst_mac_addr[6];
+	struct rtw_ieee80211_hdr *dot11_hdr;
+	struct ieee80211_radiotap_header *rtap_hdr;
 	_adapter *padapter = (_adapter *)rtw_netdev_priv(ndev);
-	struct pkt_file pktfile;
-	struct rtw_ieee80211_hdr *pwlanhdr;
-	struct pkt_attrib	*pattrib;
-	struct xmit_frame		*pmgntframe;
-	struct mlme_ext_priv	*pmlmeext = &(padapter->mlmeextpriv);
-	struct xmit_priv	*pxmitpriv = &(padapter->xmitpriv);
-	unsigned char	*pframe;
-	u8 dummybuf[32];
-	int len = skb->len, rtap_len;
 
 	if (skb)
 		rtw_mstat_update(MSTAT_TYPE_SKB, MSTAT_ALLOC_SUCCESS, skb->truesize);
@@ -4385,12 +4385,11 @@ s32 rtw_monitor_xmit_entry(struct sk_buff *skb, struct net_device *ndev)
 	if (unlikely(skb->len < sizeof(struct ieee80211_radiotap_header)))
 		goto fail;
 
-	_rtw_open_pktfile((_pkt *)skb, &pktfile);
-	_rtw_pktfile_read(&pktfile, (u8 *)(&rtap_hdr), sizeof(struct ieee80211_radiotap_header));
-	rtap_len = ieee80211_get_radiotap_len((u8 *)(&rtap_hdr));
-	if (unlikely(rtap_hdr.it_version))
+	rtap_hdr = (struct ieee80211_radiotap_header *)skb->data;
+	if (unlikely(rtap_hdr->it_version))
 		goto fail;
 
+	rtap_len = ieee80211_get_radiotap_len(skb->data);
 	if (unlikely(skb->len < rtap_len))
 		goto fail;
 
@@ -4398,50 +4397,103 @@ s32 rtw_monitor_xmit_entry(struct sk_buff *skb, struct net_device *ndev)
 		RTW_INFO("radiotap len (should be 14): %d\n", rtap_len);
 		goto fail;
 	}
-	_rtw_pktfile_read(&pktfile, dummybuf, rtap_len-sizeof(struct ieee80211_radiotap_header));
-	len = len - rtap_len;
 
-	pmgntframe = alloc_mgtxmitframe(pxmitpriv);
-	if (pmgntframe == NULL) {
-		rtw_udelay_os(500);
-		goto fail;
-	}
+	/* Skip the ratio tap header */
+	skb_pull(skb, rtap_len);
 
-	_rtw_memset(pmgntframe->buf_addr, 0, WLANHDR_OFFSET + TXDESC_OFFSET);
-	pframe = (u8 *)(pmgntframe->buf_addr) + TXDESC_OFFSET;
-//	_rtw_memcpy(pframe, (void *)checking, len);
-	_rtw_pktfile_read(&pktfile, pframe, len);
+	dot11_hdr = (struct rtw_ieee80211_hdr *)skb->data;
+	frame_ctl = le16_to_cpu(dot11_hdr->frame_ctl);
+	/* Check if the QoS bit is set */
 
-
-	/* Check DATA/MGNT frames */
-	pwlanhdr = (struct rtw_ieee80211_hdr *)pframe;
-	frame_ctl = le16_to_cpu(pwlanhdr->frame_ctl);
 	if ((frame_ctl & RTW_IEEE80211_FCTL_FTYPE) == RTW_IEEE80211_FTYPE_DATA) {
 
+		struct xmit_frame		*pmgntframe;
+		struct pkt_attrib	*pattrib;
+		unsigned char	*pframe;
+		struct rtw_ieee80211_hdr *pwlanhdr;
+		struct xmit_priv	*pxmitpriv = &(padapter->xmitpriv);
+		struct mlme_ext_priv	*pmlmeext = &(padapter->mlmeextpriv);
+		u8 *buf = skb->data;
+		u32 len = skb->len;
+		u8 category, action;
+		int type = -1;
+
+		pmgntframe = alloc_mgtxmitframe(pxmitpriv);
+		if (pmgntframe == NULL) {
+			rtw_udelay_os(500);
+			goto fail;
+		}
 		pattrib = &pmgntframe->attrib;
+
 		update_monitor_frame_attrib(padapter, pattrib);
+
+		pattrib->retry_ctrl = _FALSE;
+
+		_rtw_memset(pmgntframe->buf_addr, 0, WLANHDR_OFFSET + TXDESC_OFFSET);
+
+		pframe = (u8 *)(pmgntframe->buf_addr) + TXDESC_OFFSET;
+
+		_rtw_memcpy(pframe, (void *)buf, len);
+
+		pattrib->pktlen = len;
+
+		pwlanhdr = (struct rtw_ieee80211_hdr *)pframe;
 
 		if (is_broadcast_mac_addr(pwlanhdr->addr3) || is_broadcast_mac_addr(pwlanhdr->addr1))
 			pattrib->rate = MGN_24M;
 
+		pmlmeext->mgnt_seq = GetSequence(pwlanhdr);
+		pattrib->seqnum = pmlmeext->mgnt_seq;
+		pmlmeext->mgnt_seq++;
+
+		pattrib->last_txcmdsz = pattrib->pktlen;
+
+		dump_mgntframe(padapter, pmgntframe);
+
 	} else {
+		struct xmit_frame		*pmgntframe;
+		struct pkt_attrib	*pattrib;
+		unsigned char	*pframe;
+		struct rtw_ieee80211_hdr *pwlanhdr;
+		struct xmit_priv	*pxmitpriv = &(padapter->xmitpriv);
+		struct mlme_ext_priv	*pmlmeext = &(padapter->mlmeextpriv);
+		u8 *buf = skb->data;
+		u32 len = skb->len;
+		u8 category, action;
+		int type = -1;
+
+		pmgntframe = alloc_mgtxmitframe(pxmitpriv);
+		if (pmgntframe == NULL)
+			goto fail;
 
 		pattrib = &pmgntframe->attrib;
 		update_mgntframe_attrib(padapter, pattrib);
+		pattrib->retry_ctrl = _FALSE;
+
+		_rtw_memset(pmgntframe->buf_addr, 0, WLANHDR_OFFSET + TXDESC_OFFSET);
+
+		pframe = (u8 *)(pmgntframe->buf_addr) + TXDESC_OFFSET;
+
+		_rtw_memcpy(pframe, (void *)buf, len);
+
+		pattrib->pktlen = len;
+
+		pwlanhdr = (struct rtw_ieee80211_hdr *)pframe;
+
+		pmlmeext->mgnt_seq = GetSequence(pwlanhdr);
+		pattrib->seqnum = pmlmeext->mgnt_seq;
+		pmlmeext->mgnt_seq++;
+
+		pattrib->last_txcmdsz = pattrib->pktlen;
+
+		dump_mgntframe(padapter, pmgntframe);
 
 	}
-	pattrib->retry_ctrl = _FALSE;
-	pattrib->pktlen = len;
-	pmlmeext->mgnt_seq = GetSequence(pwlanhdr);
-	pattrib->seqnum = pmlmeext->mgnt_seq;
-	pmlmeext->mgnt_seq++;
-	pattrib->last_txcmdsz = pattrib->pktlen;
-
-	dump_mgntframe(padapter, pmgntframe);
 
 fail:
-	rtw_endofpktfile(&pktfile);
+
 	rtw_skb_free(skb);
+
 	return 0;
 }
 #endif

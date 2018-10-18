@@ -359,9 +359,8 @@ int rtw_mesh_path_add_gate(struct rtw_mesh_path *mpath)
 
 	enter_critical_bh(&mpath->state_lock);
 	mcfg = &mpath->adapter->mesh_cfg;
-	mpath->gate_timeout = rtw_get_current_time() +
-			      rtw_ms_to_systime(mcfg->path_gate_timeout_factor *
-					        mpath->gate_ann_int);
+	mpath->gate_timeout = rtw_get_current_time() + rtw_ms_to_systime(mcfg->path_gate_timeout);
+
 	if (mpath->is_gate) {
 		err = -EEXIST;
 		exit_critical_bh(&mpath->state_lock);
@@ -473,7 +472,6 @@ struct rtw_mesh_path *rtw_mesh_path_new(_adapter *adapter,
 	new_mpath->is_root = false;
 	new_mpath->adapter = adapter;
 	new_mpath->flags = 0;
-	new_mpath->gate_asked = false;
 	_rtw_init_queue(&new_mpath->frame_queue);
 	new_mpath->frame_queue_len = 0;
 	new_mpath->exp_time = rtw_get_current_time();
@@ -1041,20 +1039,10 @@ void rtw_mesh_path_tbl_expire(_adapter *adapter,
 				      FUNC_ADPT_ARG(adapter), mpath->dst,
 				      mpath->gate_timeout, rtw_get_current_time());
 			enter_critical_bh(&mpath->state_lock);
-			if (mpath->gate_asked) { /* asked gate before */
-				rtw_mesh_gate_del(tbl, mpath);
-				exit_critical_bh(&mpath->state_lock);
-			} else {
-				mpath->gate_asked = true;
-				mpath->gate_timeout = rtw_get_current_time() + rtw_ms_to_systime(mpath->gate_ann_int);
-				exit_critical_bh(&mpath->state_lock);
-				rtw_mesh_queue_preq(mpath, RTW_PREQ_Q_F_START | RTW_PREQ_Q_F_REFRESH);
-				RTW_MPATH_DBG(FUNC_ADPT_FMT"mpath [%pM] ask mesh gate existence (is_root=%d)\n",
-				      FUNC_ADPT_ARG(adapter), mpath->dst, mpath->is_root);
-			}
+			rtw_mesh_gate_del(tbl, mpath);
+			exit_critical_bh(&mpath->state_lock);
 		}
 	}
-
 out:
 	rtw_rhashtable_walk_stop(&iter);
 	rtw_rhashtable_walk_exit(&iter);

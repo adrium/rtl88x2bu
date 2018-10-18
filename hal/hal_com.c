@@ -11015,6 +11015,61 @@ void rtw_store_phy_info(_adapter *padapter, union recv_frame *prframe)
 
 }
 
+
+int check_phy_efuse_tx_power_info_valid(PADAPTER padapter)
+{
+	PHAL_DATA_TYPE pHalData = GET_HAL_DATA(padapter);
+	u8 *pContent = pHalData->efuse_eeprom_data;
+	int index = 0;
+	u16 tx_index_offset = 0x0000;
+
+	switch (rtw_get_chip_type(padapter)) {
+	case RTL8723B:
+		tx_index_offset = EEPROM_TX_PWR_INX_8723B;
+		break;
+	case RTL8703B:
+		tx_index_offset = EEPROM_TX_PWR_INX_8703B;
+		break;
+	case RTL8723D:
+		tx_index_offset = EEPROM_TX_PWR_INX_8723D;
+		break;
+	case RTL8188E:
+		tx_index_offset = EEPROM_TX_PWR_INX_88E;
+		break;
+	case RTL8188F:
+		tx_index_offset = EEPROM_TX_PWR_INX_8188F;
+		break;
+	case RTL8192E:
+		tx_index_offset = EEPROM_TX_PWR_INX_8192E;
+		break;
+	case RTL8821:
+		tx_index_offset = EEPROM_TX_PWR_INX_8821;
+		break;
+	case RTL8812:
+		tx_index_offset = EEPROM_TX_PWR_INX_8812;
+		break;
+	case RTL8814A:
+		tx_index_offset = EEPROM_TX_PWR_INX_8814;
+		break;
+	case RTL8822B:
+		tx_index_offset = EEPROM_TX_PWR_INX_8822B;
+		break;
+	case RTL8821C:
+		tx_index_offset = EEPROM_TX_PWR_INX_8821C;
+		break;
+	default:
+		tx_index_offset = 0x0010;
+		break;
+	}
+
+	/* TODO: chacking length by ICs */
+	for (index = 0 ; index < 11 ; index++) {
+		if (pContent[tx_index_offset + index] == 0xFF)
+			return _FALSE;
+	}
+	return _TRUE;
+}
+
 int hal_efuse_macaddr_offset(_adapter *adapter)
 {
 	u8 interface_type = 0;
@@ -12345,8 +12400,6 @@ void dump_hal_spec(void *sel, _adapter *adapter)
 			_RTW_PRINT_SEL(sel, "%s ", _wl_func_str[i]);
 	}
 	_RTW_PRINT_SEL(sel, "\n");
-
-	RTW_PRINT_SEL(sel, "pg_txpwr_saddr:0x%X\n", hal_spec->pg_txpwr_saddr);
 }
 
 inline bool hal_chk_band_cap(_adapter *adapter, u8 cap)

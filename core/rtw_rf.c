@@ -1806,6 +1806,34 @@ void rtw_rf_apply_tx_gain_offset(_adapter *adapter, u8 ch)
 	}
 }
 
+inline u8 rtw_is_5g_band1(u8 ch)
+{
+	if (ch >= 36 && ch <= 48)
+		return 1;
+	return 0;
+}
+
+inline u8 rtw_is_5g_band2(u8 ch)
+{
+	if (ch >= 52 && ch <= 64)
+		return 1;
+	return 0;
+}
+
+inline u8 rtw_is_5g_band3(u8 ch)
+{
+	if (ch >= 100 && ch <= 144)
+		return 1;
+	return 0;
+}
+
+inline u8 rtw_is_5g_band4(u8 ch)
+{
+	if (ch >= 149 && ch <= 177)
+		return 1;
+	return 0;
+}
+
 inline u8 rtw_is_dfs_range(u32 hi, u32 lo)
 {
 	return rtw_is_range_overlap(hi, lo, 5720 + 10, 5260 - 10);

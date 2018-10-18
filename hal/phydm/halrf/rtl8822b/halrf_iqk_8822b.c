@@ -584,10 +584,6 @@ _iqk_configure_macbb_8822b(
 	odm_write_4byte(dm, 0xe00, 0x00000004);
 	/*disable PMAC*/
 	odm_set_bb_reg(dm, 0xb00, BIT(8), 0x0);
-	/*disable CCK block*/
-	odm_set_bb_reg(dm, 0x808, BIT(28), 0x0);
-	/*disable OFDM CCA*/
-	odm_set_bb_reg(dm, 0x838, BIT(3) | BIT(2) | BIT(1), 0x7);
 	/*	PHYDM_DBG(dm, ODM_COMP_CALIBRATION, "[IQK]Set MACBB setting for IQK!!!!\n");*/
 
 }
@@ -1467,7 +1463,7 @@ _iqk_rximr_selfcheck_8822b(
 	for (i = 0 ; i < 2; i++)
 		rx_ini_power_H[i] = (rx_ini_power_H[i] & 0xf8000000)>>27;
 
-	if (rx_ini_power_H[0] != rx_ini_power_H[1]) {
+	if (rx_ini_power_H[0] != rx_ini_power_H[1])
 		switch (rx_ini_power_H[0]) {
 		case 1:
 			rx_ini_power_L[0] = (u32)((rx_ini_power_L[0]>>1) | 0x80000000);
@@ -1500,9 +1496,13 @@ _iqk_rximr_selfcheck_8822b(
 		default:
 			break;
 		}
-	}
-	rximr = (u32)(3*((halrf_psd_log2base(rx_ini_power_L[0]/100) - halrf_psd_log2base(rx_ini_power_L[1]/100)))/100);
-	return rximr;
+		rximr = (u32)(3*((halrf_psd_log2base(rx_ini_power_L[0]/100) - halrf_psd_log2base(rx_ini_power_L[1]/100)))/100);
+/*
+		PHYDM_DBG(dm, ODM_COMP_CALIBRATION, "%-20s: 0x%x, 0x%x, 0x%x, 0x%x,0x%x, tone_index=%x, rximr= %d\n",
+		(path == 0) ? "PATH A RXIMR ": "PATH B RXIMR",
+		rx_ini_power_H[0], rx_ini_power_L[0], rx_ini_power_H[1], rx_ini_power_L[1], tmp1bcc, tone_index, rximr);
+*/
+		return rximr;
 }
 
 
@@ -1559,10 +1559,10 @@ _iqk_rximr_test_8822b(
 				temp = odm_read_4byte(dm, 0x1b1c);
 				for (side =0; side < 2; side++) {
 					for (i = 0; i < imr_limit; i++) {
-						if (side ==0)
-							tone_index = 0xff8 -(i<<4);
-						else							
-							tone_index = 0x08 | (i<<4);
+					if (side ==0)
+						tone_index = 0xff8 -(i<<4);
+					else							
+						tone_index = 0x08 | (i<<4);
 						while (count < 3) {
 							_iqk_rxk1_setting_8822b(dm, path);
 							kfail = _iqk_rximr_rxk1_test_8822b(dm, path, tone_index);
@@ -1650,7 +1650,7 @@ _phy_iq_calibrate_8822b(
 {
 	u32	MAC_backup[MAC_REG_NUM_8822B], BB_backup[BB_REG_NUM_8822B], RF_backup[RF_REG_NUM_8822B][SS_8822B];
 	u32	backup_mac_reg[MAC_REG_NUM_8822B] = {0x520, 0x550};
-	u32	backup_bb_reg[BB_REG_NUM_8822B] = {0x808, 0x90c, 0xc00, 0xcb0, 0xcb4, 0xcbc, 0xe00, 0xeb0, 0xeb4, 0xebc, 0x1990, 0x9a4, 0xa04, 0xb00, 0x838};
+	u32	backup_bb_reg[BB_REG_NUM_8822B] = {0x808, 0x90c, 0xc00, 0xcb0, 0xcb4, 0xcbc, 0xe00, 0xeb0, 0xeb4, 0xebc, 0x1990, 0x9a4, 0xa04, 0xb00};
 	u32	backup_rf_reg[RF_REG_NUM_8822B] = {0xdf, 0x8f, 0x65, 0x0, 0x1};
 	boolean is_mp = false;
 
@@ -1738,8 +1738,9 @@ _phy_iq_calibrate_by_fw_8822b(
 		PHYDM_DBG(dm, ODM_COMP_CALIBRATION, "[IQK]FWIQK fail!!!\n");
 }
 
-/*IQK_version:0x2f, NCTL:0x8*/
-/*1.disable CCK block and OFDM CCA block while IQKing*/
+/*IQK_version:0x2e NCTL:0x8*/
+/*1.add fwiqk reload check*/
+/*2.fix gain search overflow issue*/
 void
 phy_iq_calibrate_8822b(
 	void		*dm_void,

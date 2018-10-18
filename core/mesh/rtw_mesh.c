@@ -417,8 +417,7 @@ void rtw_chk_candidate_peer_notify(_adapter *adapter, struct wlan_network *scann
 	if (plink_ctl->num >= mcfg->max_peer_links)
 		goto exit;
 
-	if (rtw_get_passing_time_ms(scanned->last_scanned) >= mcfg->peer_sel_policy.scanr_exp_ms
-		|| (mcfg->rssi_threshold && mcfg->rssi_threshold > scanned->network.Rssi)
+	if ((mcfg->rssi_threshold && mcfg->rssi_threshold > scanned->network.Rssi)
 		|| !rtw_bss_is_candidate_mesh_peer(&mlme->cur_network.network, &scanned->network, 1, 1)
 		#if CONFIG_RTW_MACADDR_ACL
 		|| rtw_access_ctrl(adapter, scanned->network.MacAddress) == _FALSE
@@ -738,10 +737,10 @@ void dump_mesh_peer_sel_policy(void *sel, _adapter *adapter)
 	struct mesh_peer_sel_policy *peer_sel_policy = &adapter->mesh_cfg.peer_sel_policy;
 
 #if CONFIG_RTW_MESH_OFFCH_CAND
-#define OFFCH_CAND_TITLE_FMT " %-17s"
-#define OFFCH_CAND_VALUE_FMT " %17u"
-#define OFFCH_CAND_TITLE_ARG , "offch_find_int_ms"
-#define OFFCH_CAND_VALUE_ARG , peer_sel_policy->offch_find_int_ms
+#define OFFCH_CAND_TITLE_FMT " %-17s %-12s"
+#define OFFCH_CAND_VALUE_FMT " %17u %12u"
+#define OFFCH_CAND_TITLE_ARG , "offch_find_int_ms", "scanr_exp_ms"
+#define OFFCH_CAND_VALUE_ARG , peer_sel_policy->offch_find_int_ms, peer_sel_policy->scanr_exp_ms
 #else
 #define OFFCH_CAND_TITLE_FMT ""
 #define OFFCH_CAND_VALUE_FMT ""
@@ -750,17 +749,13 @@ void dump_mesh_peer_sel_policy(void *sel, _adapter *adapter)
 #endif
 
 	RTW_PRINT_SEL(sel,
-		"%-12s"
 		OFFCH_CAND_TITLE_FMT
 		"\n"
-		, "scanr_exp_ms"
 		OFFCH_CAND_TITLE_ARG
 	);
 	RTW_PRINT_SEL(sel,
-		"%12u"
 		OFFCH_CAND_VALUE_FMT
 		"\n"
-		, peer_sel_policy->scanr_exp_ms
 		OFFCH_CAND_VALUE_ARG
 	);
 }
@@ -779,41 +774,17 @@ void dump_mesh_networks(void *sel, _adapter *adapter)
 	s32 age_ms;
 	u8 *mesh_conf_ie;
 	sint mesh_conf_ie_len;
-	struct wlan_network **mesh_networks;
-	u8 mesh_network_cnt = 0;
-	int i;
-
-	mesh_networks = rtw_zvmalloc(MAX_BSS_CNT * sizeof(struct wlan_network *));
-	if (!mesh_networks)
-		return;
 
 	enter_critical_bh(&queue->lock);
 	head = get_list_head(queue);
 	list = get_next(head);
 
-	while (rtw_end_of_queue_search(head, list) == _FALSE) {
-		network = LIST_CONTAINOR(list, struct wlan_network, list);
-		list = get_next(list);
-
-		if (network->network.InfrastructureMode != Ndis802_11_mesh)
-			continue;
-
-		mesh_conf_ie = rtw_get_ie(BSS_EX_TLV_IES(&network->network), WLAN_EID_MESH_CONFIG
-			, &mesh_conf_ie_len, BSS_EX_TLV_IES_LEN(&network->network));
-		if (!mesh_conf_ie || mesh_conf_ie_len != 7)
-			continue;
-
-		mesh_networks[mesh_network_cnt++] = network;
-	}
-
-	exit_critical_bh(&queue->lock);
-
 	RTW_PRINT_SEL(sel, "  %-17s %-3s %-4s %-5s %-32s %-3s %-3s %-3s\n"
 		, "bssid", "ch", "rssi", "age", "mesh_id", "nop", "fwd", "cto");
 
-
-	for (i = 0; i < mesh_network_cnt; i++) {
-		network = mesh_networks[i];
+	while (rtw_end_of_queue_search(head, list) == _FALSE) {
+		network = LIST_CONTAINOR(list, struct wlan_network, list);
+		list = get_next(list);
 
 		if (network->network.InfrastructureMode != Ndis802_11_mesh)
 			continue;
@@ -859,7 +830,7 @@ void dump_mesh_networks(void *sel, _adapter *adapter)
 		);
 	}
 
-	rtw_vmfree(mesh_networks, MAX_BSS_CNT * sizeof(struct wlan_network *));
+	exit_critical_bh(&queue->lock);
 }
 
 int rtw_sae_check_frames(_adapter *adapter, const u8 *buf, u32 len, u8 tx)
@@ -1852,8 +1823,10 @@ void _rtw_mesh_plink_del_ent(_adapter *adapter, struct mesh_plink_ent *ent)
 		rtw_mfree(ent->rx_conf_ies, ent->rx_conf_ies_len);
 	ent->rx_conf_ies = NULL;
 	ent->rx_conf_ies_len = 0;
-	if (ent->scanned)
+	if (ent->scanned) {
+		_rtw_free_network(&adapter->mlmepriv, ent->scanned, 1);
 		ent->scanned = NULL;
+	}
 	plink_ctl->num--;
 }
 
@@ -2097,8 +2070,6 @@ int rtw_mesh_peer_establish(_adapter *adapter, struct mesh_plink_ent *plink, str
 
 	rtw_ewma_err_rate_init(&sta->metrics.err_rate);
 	rtw_ewma_err_rate_add(&sta->metrics.err_rate, 1);
-	/* init data_rate to 1M */
-	sta->metrics.data_rate = 10;
 
 	_enter_critical_bh(&stapriv->asoc_list_lock, &irqL);
 	if (rtw_is_list_empty(&sta->asoc_list)) {
@@ -2591,10 +2562,9 @@ void rtw_mesh_cfg_init_peer_sel_policy(struct rtw_mesh_cfg *mcfg)
 {
 	struct mesh_peer_sel_policy *sel_policy = &mcfg->peer_sel_policy;
 
-	sel_policy->scanr_exp_ms = RTW_MESH_SCAN_RESULT_EXP_MS;
-
 #if CONFIG_RTW_MESH_OFFCH_CAND
 	sel_policy->offch_find_int_ms = RTW_MESH_OFFCH_CAND_FIND_INT_MS;
+	sel_policy->scanr_exp_ms = RTW_MESH_SCAN_RESULT_EXP_MS;
 #endif
 
 #if CONFIG_RTW_MESH_PEER_BLACKLIST
@@ -2633,7 +2603,7 @@ void rtw_mesh_cfg_init(_adapter *adapter)
 	mcfg->dot11MeshHWMPactivePathToRootTimeout = RTW_MESH_PATH_TO_ROOT_TIMEOUT;
 	mcfg->dot11MeshHWMProotInterval = RTW_MESH_ROOT_INTERVAL;
 	mcfg->dot11MeshHWMPconfirmationInterval = RTW_MESH_ROOT_CONFIRMATION_INTERVAL;
-	mcfg->path_gate_timeout_factor = 3;
+	mcfg->path_gate_timeout = 3 * max(mcfg->dot11MeshHWMPRannInterval, mcfg->dot11MeshHWMProotInterval);
 	rtw_mesh_cfg_init_peer_sel_policy(mcfg);
 
 #if CONFIG_RTW_MESH_DATA_BMC_TO_UC

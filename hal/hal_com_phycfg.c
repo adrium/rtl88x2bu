@@ -17,12 +17,6 @@
 #include <drv_types.h>
 #include <hal_data.h>
 
-#define PG_TXPWR_1PATH_BYTE_NUM_2G 18
-#define PG_TXPWR_BASE_BYTE_NUM_2G 11
-
-#define PG_TXPWR_1PATH_BYTE_NUM_5G 24
-#define PG_TXPWR_BASE_BYTE_NUM_5G 14
-
 #define PG_TXPWR_MSB_DIFF_S4BIT(_pg_v) (((_pg_v) & 0xf0) >> 4)
 #define PG_TXPWR_LSB_DIFF_S4BIT(_pg_v) ((_pg_v) & 0x0f)
 #define PG_TXPWR_MSB_DIFF_TO_S8BIT(_pg_v) ((PG_TXPWR_MSB_DIFF_S4BIT(_pg_v) & BIT3) ? (PG_TXPWR_MSB_DIFF_S4BIT(_pg_v) | 0xF0) : PG_TXPWR_MSB_DIFF_S4BIT(_pg_v))
@@ -581,6 +575,8 @@ u16 hal_load_pg_txpwr_info_path_2g(
 	const struct map_t *txpwr_map,
 	u16 pg_offset)
 {
+#define PG_TXPWR_1PATH_BYTE_NUM_2G 18
+
 	struct hal_spec_t *hal_spec = GET_HAL_SPEC(adapter);
 	u16 offset = pg_offset;
 	u8 group, tx_idx;
@@ -709,6 +705,8 @@ u16 hal_load_pg_txpwr_info_path_5g(
 	const struct map_t *txpwr_map,
 	u16 pg_offset)
 {
+#define PG_TXPWR_1PATH_BYTE_NUM_5G 24
+
 	struct hal_spec_t *hal_spec = GET_HAL_SPEC(adapter);
 	u16 offset = pg_offset;
 	u8 group, tx_idx;
@@ -880,7 +878,7 @@ void hal_load_pg_txpwr_info(
 	hal_init_pg_txpwr_info_5g(adapter, pwr_info_5g);
 
 select_src:
-	pg_offset = hal_spec->pg_txpwr_saddr;
+	pg_offset = 0x10;
 
 	switch (txpwr_src) {
 	case PG_TXPWR_SRC_PG_DATA:
@@ -928,79 +926,6 @@ exit:
 
 	return;
 }
-
-#ifdef CONFIG_EFUSE_CONFIG_FILE
-
-#define EFUSE_POWER_INDEX_INVALID 0xFF
-
-static u8 _check_phy_efuse_tx_power_info_valid(u8 *pg_data, int base_len, u16 pg_offset)
-{
-	int ff_cnt = 0;
-	int i;
-
-	for (i = 0; i < base_len; i++) {
-		if (*(pg_data + pg_offset + i) == 0xFF)
-			ff_cnt++;
-	}
-
-	if (ff_cnt == 0)
-		return _TRUE;
-	else if (ff_cnt == base_len)
-		return _FALSE;
-	else
-		return EFUSE_POWER_INDEX_INVALID;
-}
-
-int check_phy_efuse_tx_power_info_valid(_adapter *adapter)
-{
-	struct hal_spec_t *hal_spec = GET_HAL_SPEC(adapter);
-	HAL_DATA_TYPE *hal_data = GET_HAL_DATA(adapter);
-	u8 *pg_data = hal_data->efuse_eeprom_data;
-	u16 pg_offset = hal_spec->pg_txpwr_saddr;
-	u8 path;
-	u8 valid_2g_path_bmp = 0;
-#ifdef CONFIG_IEEE80211_BAND_5GHZ
-	u8 valid_5g_path_bmp = 0;
-#endif
-	int result = _FALSE;
-
-	for (path = 0; path < MAX_RF_PATH; path++) {
-		u8 ret = _FALSE;
-
-		if (!HAL_SPEC_CHK_RF_PATH_2G(hal_spec, path) && !HAL_SPEC_CHK_RF_PATH_5G(hal_spec, path))
-			break;
-
-		if (HAL_SPEC_CHK_RF_PATH_2G(hal_spec, path)) {
-			ret = _check_phy_efuse_tx_power_info_valid(pg_data, PG_TXPWR_BASE_BYTE_NUM_2G, pg_offset);
-			if (ret == _TRUE)
-				valid_2g_path_bmp |= BIT(path);
-			else if (ret == EFUSE_POWER_INDEX_INVALID)
-				return _FALSE;
-		}
-		pg_offset += PG_TXPWR_1PATH_BYTE_NUM_2G;
-
-		#ifdef CONFIG_IEEE80211_BAND_5GHZ
-		if (HAL_SPEC_CHK_RF_PATH_5G(hal_spec, path)) {
-			ret = _check_phy_efuse_tx_power_info_valid(pg_data, PG_TXPWR_BASE_BYTE_NUM_5G, pg_offset);
-			if (ret == _TRUE)
-				valid_5g_path_bmp |= BIT(path);
-			else if (ret == EFUSE_POWER_INDEX_INVALID)
-				return _FALSE;
-		}
-		#endif
-		pg_offset += PG_TXPWR_1PATH_BYTE_NUM_5G;
-	}
-
-	if ((hal_chk_band_cap(adapter, BAND_CAP_2G) && valid_2g_path_bmp)
-		#ifdef CONFIG_IEEE80211_BAND_5GHZ
-		|| (hal_chk_band_cap(adapter, BAND_CAP_5G) && valid_5g_path_bmp)
-		#endif
-	)
-		return _TRUE;
-
-	return _FALSE;
-}
-#endif /* CONFIG_EFUSE_CONFIG_FILE */
 
 void hal_load_txpwr_info(
 	_adapter *adapter,

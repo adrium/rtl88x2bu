@@ -174,8 +174,8 @@ typedef enum _bt_op_code {
 	BT_OP_GET_BT_COEX_SUPPORTED_FEATURE		= 0x2a,
 	BT_OP_GET_BT_COEX_SUPPORTED_VERSION		= 0x2b,
 	BT_OP_GET_BT_ANT_DET_VAL				= 0x2c,
-	BT_OP_GET_BT_BLE_SCAN_TYPE				= 0x2d,
-	BT_OP_GET_BT_BLE_SCAN_PARA				= 0x2e,
+	BT_OP_GET_BT_BLE_SCAN_PARA				= 0x2d,
+	BT_OP_GET_BT_BLE_SCAN_TYPE				= 0x2e,
 	BT_OP_GET_BT_DEVICE_INFO				= 0x30,
 	BT_OP_GET_BT_FORBIDDEN_SLOT_VAL			= 0x31,
 	BT_OP_SET_BT_LANCONSTRAIN_LEVEL			= 0x32,
@@ -2239,12 +2239,11 @@ u32 halbtcoutsrc_GetBleScanParaFromBt(void *pBtcContext, u8 scanType)
 		u8 op_code;
 		u8 status;
 		
-		buf[0] = scanType;
 
 		_enter_critical_mutex(&GLBtcBtMpOperLock, &irqL);
 
 		op_code = BT_OP_GET_BT_BLE_SCAN_PARA;
-		status = _btmpoper_cmd(pBtCoexist, op_code, 0, buf, 1);
+		status = _btmpoper_cmd(pBtCoexist, op_code, 0, buf, 0);
 		if (status == BT_STATUS_BT_OP_SUCCESS)
 			data = le32_to_cpu(*(u32 *)GLBtcBtMpRptRsp);
 		else

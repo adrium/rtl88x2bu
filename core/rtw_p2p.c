@@ -3476,7 +3476,7 @@ static int cancel_ro_ch_handler(_adapter *padapter, u8 *buf)
 
 	rtw_cfg80211_set_is_roch(padapter, _FALSE);
 	pcfg80211_wdinfo->ro_ch_wdev = NULL;
-	rtw_cfg80211_set_last_ro_ch_time(padapter);
+	pcfg80211_wdinfo->last_ro_ch_time = rtw_get_current_time();
 
 	rtw_cfg80211_remain_on_channel_expired(wdev
 		, pcfg80211_wdinfo->remain_on_ch_cookie

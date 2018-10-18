@@ -872,8 +872,6 @@ struct rf_ctl_t {
 	#endif
 #endif
 
-	u8 ch_sel_same_band_prefer;
-
 #ifdef CONFIG_DFS_MASTER
 	bool radar_detect_by_others;
 	u8 dfs_master_enabled;

@@ -3369,9 +3369,6 @@ static int rtw_check_roaming_candidate(struct mlme_priv *mlme
 	int updated = _FALSE;
 	_adapter *adapter = container_of(mlme, _adapter, mlmepriv);
 
-	if (rtw_chset_search_ch(adapter_to_chset(adapter), competitor->network.Configuration.DSConfig) < 0)
-		goto exit;
-
 #if defined(CONFIG_RTW_REPEATER_SON) &&  (!defined(CONFIG_RTW_REPEATER_SON_ROOT))
 	if (rtw_rson_isupdate_roamcan(mlme, candidate, competitor))
 		goto  update;

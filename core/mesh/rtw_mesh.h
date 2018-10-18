@@ -19,11 +19,11 @@
 	#error "CONFIG_RTW_MESH can't be enabled when CONFIG_AP_MODE is not defined\n"
 #endif
 
-#ifndef RTW_MESH_SCAN_RESULT_EXP_MS
-#define RTW_MESH_SCAN_RESULT_EXP_MS (10 * 1000)
-#endif
 #ifndef RTW_MESH_OFFCH_CAND_FIND_INT_MS
 #define RTW_MESH_OFFCH_CAND_FIND_INT_MS (10 * 1000)
+#endif
+#ifndef RTW_MESH_SCAN_RESULT_EXP_MS
+#define RTW_MESH_SCAN_RESULT_EXP_MS (10 * 1000)
 #endif
 #define RTW_MESH_TTL						31
 #define RTW_MESH_PERR_MIN_INT				100
@@ -256,10 +256,9 @@ struct mesh_plink_pool {
 #define RTW_MESH_CTO_MGATE_BLACKLIST_TIMEOUT_MS (20 * 1000)
 
 struct mesh_peer_sel_policy {
-	u32 scanr_exp_ms;
-
 #if CONFIG_RTW_MESH_OFFCH_CAND
 	u32 offch_find_int_ms; /* 0 means no offch find by driver */
+	u32 scanr_exp_ms;
 #endif
 
 #if CONFIG_RTW_MESH_PEER_BLACKLIST
@@ -314,7 +313,7 @@ struct rtw_mesh_cfg {
 	BOOLEAN dot11MeshGateAnnouncementProtocol;
 	u32 dot11MeshHWMPactivePathToRootTimeout;
 	u16 dot11MeshHWMProotInterval;
-	u8 path_gate_timeout_factor;
+	u32 path_gate_timeout;
 
 	struct mesh_peer_sel_policy peer_sel_policy;
 

@@ -1965,6 +1965,52 @@ ssize_t proc_set_del_rx_ampdu_test_case(struct file *file, const char __user *bu
 	return count;
 }
 
+#ifdef CONFIG_DFS_MASTER
+int proc_get_dfs_master_test_case(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
+	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
+
+	RTW_PRINT_SEL(m, "%-24s %-19s\n", "radar_detect_trigger_non", "choose_dfs_ch_first");
+	RTW_PRINT_SEL(m, "%24hhu %19hhu\n"
+		, rfctl->dbg_dfs_master_radar_detect_trigger_non
+		, rfctl->dbg_dfs_master_choose_dfs_ch_first
+	);
+
+	return 0;
+}
+
+ssize_t proc_set_dfs_master_test_case(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
+	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
+	char tmp[32];
+	u8 radar_detect_trigger_non;
+	u8 choose_dfs_ch_first;
+
+	if (count < 1)
+		return -EFAULT;
+
+	if (count > sizeof(tmp)) {
+		rtw_warn_on(1);
+		return -EFAULT;
+	}
+
+	if (buffer && !copy_from_user(tmp, buffer, count)) {
+		int num = sscanf(tmp, "%hhu %hhu", &radar_detect_trigger_non, &choose_dfs_ch_first);
+
+		if (num >= 1)
+			rfctl->dbg_dfs_master_radar_detect_trigger_non = radar_detect_trigger_non;
+		if (num >= 2)
+			rfctl->dbg_dfs_master_choose_dfs_ch_first = choose_dfs_ch_first;
+	}
+
+	return count;
+}
+#endif /* CONFIG_DFS_MASTER */
+
 static u32 g_wait_hiq_empty_ms = 0;
 
 u32 rtw_get_wait_hiq_empty_ms(void)

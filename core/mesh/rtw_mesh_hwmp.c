@@ -599,6 +599,9 @@ void rtw_ieee80211s_update_metric(_adapter *adapter, u8 mac_id,
 	if (!sta)
 		return;
 
+	if (total_pkt < RTW_TOTAL_PKT_MIN_THRESHOLD)
+		return;
+
 	/* if RA, use reported rate */
 	if (adapter->fix_rate == 0xff) {
 		rate_idx = rate & 0x7f;
@@ -607,11 +610,8 @@ void rtw_ieee80211s_update_metric(_adapter *adapter, u8 mac_id,
 		rate_idx = adapter->fix_rate & 0x7f;
 		sgi = adapter->fix_rate >> 7;
 	}
+
 	sta->metrics.data_rate = rtw_desc_rate_to_bitrate(bw, rate_idx, sgi);
-
-	if (total_pkt < RTW_TOTAL_PKT_MIN_THRESHOLD)
-		return;
-
 	/* TBD: sta->metrics.overhead = phydm_get_plcp(void *dm_void, u16 macid); */
 	sta->metrics.total_pkt = total_pkt;
 
@@ -630,7 +630,7 @@ static void rtw_hwmp_preq_frame_process(_adapter *adapter,
 	struct rtw_mesh_path *path = NULL;
 	const u8 *target_addr, *originator_addr;
 	const u8 *da;
-	u8 target_flags, ttl, flags, to_gate_ask = 0;
+	u8 target_flags, ttl, flags;
 	u32 originator_sn, target_sn, lifetime, target_metric = 0;
 	BOOLEAN reply = _FALSE;
 	BOOLEAN forward = _TRUE;
@@ -667,7 +667,6 @@ static void rtw_hwmp_preq_frame_process(_adapter *adapter,
 #endif
 		forward = _FALSE;
 		reply = _TRUE;
-		to_gate_ask = 1;
 		target_metric = 0;
 		if (rtw_time_after(rtw_get_current_time(), minfo->last_sn_update +
 					rtw_net_traversal_jiffies(adapter)) ||
@@ -688,13 +687,9 @@ static void rtw_hwmp_preq_frame_process(_adapter *adapter,
 				target_metric = 0;
 				minfo->last_sn_update = rtw_get_current_time();
 			}
-
-			if (preq_is_gate) {
-				lifetime = RTW_PREQ_IE_LIFETIME(preq_elem);
-				path->gate_ann_int = lifetime;
-				path->gate_asked = false;
+			if (preq_is_gate)
 				rtw_mesh_path_add_gate(path);
-			} else if (path->is_gate) {
+			else if (path->is_gate) {
 				enter_critical_bh(&path->state_lock);
 				rtw_mesh_gate_del(adapter->mesh_info.mesh_paths, path);
 				exit_critical_bh(&path->state_lock);
@@ -737,23 +732,9 @@ static void rtw_hwmp_preq_frame_process(_adapter *adapter,
 	if (reply) {
 		lifetime = RTW_PREQ_IE_LIFETIME(preq_elem);
 		ttl = mshcfg->element_ttl;
-		if (ttl != 0 && !to_gate_ask) {
+		if (ttl != 0) {
 			RTW_HWMP_DBG("replying to the PREQ\n");
 			rtw_mesh_path_sel_frame_tx(RTW_MPATH_PREP, 0, originator_addr,
-						   originator_sn, 0, target_addr,
-						   target_sn, mgmt->addr2, 0, ttl,
-						   lifetime, target_metric, 0,
-						   adapter);
-		} else if (ttl != 0 && to_gate_ask) {
-			RTW_HWMP_DBG("replying to the PREQ (PREQ for us)\n");
-			if (mshcfg->dot11MeshGateAnnouncementProtocol) {
-				/* BIT 7 is used to identify the prep is from mesh gate */
-				to_gate_ask = RTW_IEEE80211_PREQ_IS_GATE_FLAG | BIT(7);
-			} else {
-				to_gate_ask = 0;
-			}
-
-			rtw_mesh_path_sel_frame_tx(RTW_MPATH_PREP, to_gate_ask, originator_addr,
 						   originator_sn, 0, target_addr,
 						   target_sn, mgmt->addr2, 0, ttl,
 						   lifetime, target_metric, 0,
@@ -820,26 +801,9 @@ static void rtw_hwmp_prep_frame_process(_adapter *adapter,
 		  MAC_ARG(RTW_PREP_IE_TARGET_ADDR(prep_elem)));
 
 	originator_addr = RTW_PREP_IE_ORIG_ADDR(prep_elem);
-	if (rtw_ether_addr_equal(originator_addr, adapter_mac_addr(adapter))) {
+	if (rtw_ether_addr_equal(originator_addr, adapter_mac_addr(adapter)))
 		/* destination, no forwarding required */
-		rtw_rcu_read_lock();
-		target_addr = RTW_PREP_IE_TARGET_ADDR(prep_elem);
-		path = rtw_mesh_path_lookup(adapter, target_addr);
-		if (path && path->gate_asked) {
-			enter_critical_bh(&path->state_lock);
-			path->gate_asked = false;
-			exit_critical_bh(&path->state_lock);
-			flags = RTW_PREP_IE_FLAGS(prep_elem);
-			if ((flags & BIT(7)) && !(flags & RTW_IEEE80211_PREQ_IS_GATE_FLAG)) {
-				enter_critical_bh(&path->state_lock);
-				rtw_mesh_gate_del(adapter->mesh_info.mesh_paths, path);
-				exit_critical_bh(&path->state_lock);
-			}
-		}
-
-		rtw_rcu_read_unlock();
 		return;
-	}
 
 	if (!mshcfg->dot11MeshForwarding)
 		return;
@@ -1013,11 +977,9 @@ static void rtw_hwmp_rann_frame_process(_adapter *adapter,
 	 * addressed PREQs destined for root mesh STA */
 	_rtw_memcpy(path->rann_snd_addr, mgmt->addr2, ETH_ALEN);
 
-	if (root_is_gate) {
-		path->gate_ann_int = interval;
-		path->gate_asked = false;
+	if (root_is_gate)
 		rtw_mesh_path_add_gate(path);
-	} else if (path->is_gate) {
+	else if (path->is_gate) {
 		enter_critical_bh(&path->state_lock);
 		rtw_mesh_gate_del(adapter->mesh_info.mesh_paths, path);
 		exit_critical_bh(&path->state_lock);

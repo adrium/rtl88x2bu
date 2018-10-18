@@ -5061,7 +5061,7 @@ static int	cfg80211_rtw_add_station(struct wiphy *wiphy, struct net_device *ndev
 		struct mesh_plink_pool *plink_ctl = &minfo->plink_ctl;
 		struct mesh_plink_ent *plink = NULL;
 		struct wlan_network *scanned = NULL;
-		u8 add_new_sta = 0, probe_req = 0;
+		u8 add_new_sta = 0;
 		_irqL irqL;
 
 		if (params->plink_state != NL80211_PLINK_LISTEN) {
@@ -5099,17 +5099,9 @@ static int	cfg80211_rtw_add_station(struct wiphy *wiphy, struct net_device *ndev
 		}
 
 		scanned = rtw_find_network(&padapter->mlmepriv.scanned_queue, mac);
-		if (!scanned
-			|| rtw_get_passing_time_ms(scanned->last_scanned) >= mcfg->peer_sel_policy.scanr_exp_ms
-		) {
-			if (!scanned)
-				RTW_INFO(FUNC_NDEV_FMT" corresponding network not found\n", FUNC_NDEV_ARG(ndev));
-			else
-				RTW_INFO(FUNC_NDEV_FMT" corresponding network too old\n", FUNC_NDEV_ARG(ndev));
-
-			if (adapter_to_rfctl(padapter)->offch_state == OFFCHS_NONE)
-				probe_req = 1;
-
+		if (!scanned) {
+			RTW_WARN(FUNC_NDEV_FMT" can't find corresponding network in scan queue\n"
+				, FUNC_NDEV_ARG(ndev));
 			ret = -EINVAL;
 			goto release_plink_ctl;
 		}
@@ -5144,9 +5136,6 @@ static int	cfg80211_rtw_add_station(struct wiphy *wiphy, struct net_device *ndev
 		}
 release_plink_ctl:
 		_exit_critical_bh(&(plink_ctl->lock), &irqL);
-
-		if (probe_req)
-			issue_probereq(padapter, &padapter->mlmepriv.cur_network.network.mesh_id, mac);
 
 		if (add_new_sta) {
 			struct station_info sinfo;
@@ -6154,24 +6143,6 @@ inline bool rtw_cfg80211_get_is_roch(_adapter *adapter)
 	return adapter->cfg80211_wdinfo.is_ro_ch;
 }
 
-inline bool rtw_cfg80211_is_ro_ch_once(_adapter *adapter)
-{
-	return adapter->cfg80211_wdinfo.last_ro_ch_time ? 1 : 0;
-}
-
-inline void rtw_cfg80211_set_last_ro_ch_time(_adapter *adapter)
-{
-	adapter->cfg80211_wdinfo.last_ro_ch_time = rtw_get_current_time();
-
-	if (!adapter->cfg80211_wdinfo.last_ro_ch_time)
-		adapter->cfg80211_wdinfo.last_ro_ch_time++;
-}
-
-inline s32 rtw_cfg80211_get_last_ro_ch_passing_ms(_adapter *adapter)
-{
-	return rtw_get_passing_time_ms(adapter->cfg80211_wdinfo.last_ro_ch_time);
-}
-
 static s32 cfg80211_rtw_remain_on_channel(struct wiphy *wiphy,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0))
 	struct wireless_dev *wdev,
@@ -6302,7 +6273,7 @@ static s32 cfg80211_rtw_remain_on_channel(struct wiphy *wiphy,
 	rtw_cfg80211_set_is_roch(padapter, _TRUE);
 	pcfg80211_wdinfo->ro_ch_wdev = wdev;
 	pcfg80211_wdinfo->remain_on_ch_cookie = *cookie;
-	rtw_cfg80211_set_last_ro_ch_time(padapter);
+	pcfg80211_wdinfo->last_ro_ch_time = rtw_get_current_time();
 	_rtw_memcpy(&pcfg80211_wdinfo->remain_on_ch_channel, channel, sizeof(struct ieee80211_channel));
 	#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	pcfg80211_wdinfo->remain_on_ch_type = channel_type;
@@ -7449,43 +7420,6 @@ static void rtw_cfg80211_mesh_info_set_profile(struct rtw_mesh_info *minfo, cons
 #endif
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0))
 	minfo->mesh_auth_id = setup->auth_id;
-#else
-	if (setup->is_authenticated) {
-		u8 *rsn_ie;
-		sint rsn_ie_len;
-		struct rsne_info info;
-		u8 *akm;
-		u8 AKM_SUITE_SAE[4] = {0x00, 0x0F, 0xAC, 0x08};
-
-		rsn_ie = rtw_get_ie(setup->ie, WLAN_EID_RSN, &rsn_ie_len, setup->ie_len);
-		if (!rsn_ie || !rsn_ie_len) {
-			rtw_warn_on(1);
-			return;
-		}
-
-		if (rtw_rsne_info_parse(rsn_ie, rsn_ie_len + 2, &info) != _SUCCESS) {
-			rtw_warn_on(1);
-			return;
-		}
-
-		if (!info.akm_list || !info.akm_cnt) {
-			rtw_warn_on(1);
-			return;
-		}
-
-		akm = info.akm_list;
-		while (akm < info.akm_list + info.akm_cnt * 4) {
-			if (_rtw_memcmp(akm, AKM_SUITE_SAE, 4) == _TRUE) {
-				minfo->mesh_auth_id = 0x01;
-				break;
-			}
-		}
-
-		if (!minfo->mesh_auth_id) {
-			rtw_warn_on(1);
-			return;
-		}
-	}
 #endif
 }
 

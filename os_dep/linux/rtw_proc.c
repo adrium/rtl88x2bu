@@ -1304,92 +1304,7 @@ exit:
 }
 #endif /* CONFIG_RTW_PRE_LINK_STA */
 
-static int proc_get_ch_sel_policy(struct seq_file *m, void *v)
-{
-	struct net_device *dev = m->private;
-	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
-	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
-
-	RTW_PRINT_SEL(m, "%-16s\n", "same_band_prefer");
-
-	RTW_PRINT_SEL(m, "%16u\n", rfctl->ch_sel_same_band_prefer);
-
-	return 0;
-}
-
-static ssize_t proc_set_ch_sel_policy(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
-{
-	struct net_device *dev = data;
-	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
-	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
-	char tmp[32];
-	u8 sb_prefer;
-	int num;
-
-	if (count < 1)
-		return -EFAULT;
-
-	if (count > sizeof(tmp)) {
-		rtw_warn_on(1);
-		return -EFAULT;
-	}
-
-	if (!buffer || copy_from_user(tmp, buffer, count))
-		goto exit;
-
-	num = sscanf(tmp, "%hhu", &sb_prefer);
-	if (num >=	1)
-		rfctl->ch_sel_same_band_prefer = sb_prefer;
-
-exit:
-	return count;
-}
-
 #ifdef CONFIG_DFS_MASTER
-int proc_get_dfs_master_test_case(struct seq_file *m, void *v)
-{
-	struct net_device *dev = m->private;
-	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
-	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
-
-	RTW_PRINT_SEL(m, "%-24s %-19s\n", "radar_detect_trigger_non", "choose_dfs_ch_first");
-	RTW_PRINT_SEL(m, "%24hhu %19hhu\n"
-		, rfctl->dbg_dfs_master_radar_detect_trigger_non
-		, rfctl->dbg_dfs_master_choose_dfs_ch_first
-	);
-
-	return 0;
-}
-
-ssize_t proc_set_dfs_master_test_case(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
-{
-	struct net_device *dev = data;
-	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
-	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
-	char tmp[32];
-	u8 radar_detect_trigger_non;
-	u8 choose_dfs_ch_first;
-
-	if (count < 1)
-		return -EFAULT;
-
-	if (count > sizeof(tmp)) {
-		rtw_warn_on(1);
-		return -EFAULT;
-	}
-
-	if (buffer && !copy_from_user(tmp, buffer, count)) {
-		int num = sscanf(tmp, "%hhu %hhu", &radar_detect_trigger_non, &choose_dfs_ch_first);
-
-		if (num >= 1)
-			rfctl->dbg_dfs_master_radar_detect_trigger_non = radar_detect_trigger_non;
-		if (num >= 2)
-			rfctl->dbg_dfs_master_choose_dfs_ch_first = choose_dfs_ch_first;
-	}
-
-	return count;
-}
-
 ssize_t proc_set_update_non_ocp(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
 {
 	struct net_device *dev = data;
@@ -3121,8 +3036,8 @@ static int proc_get_mesh_gate_timeout(struct seq_file *m, void *v)
 	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
 
 	if (MLME_IS_MESH(adapter))
-		RTW_PRINT_SEL(m, "%u factor\n",
-			       adapter->mesh_cfg.path_gate_timeout_factor);
+		RTW_PRINT_SEL(m, "%u ms\n",
+			       adapter->mesh_cfg.path_gate_timeout);
 
 	return 0;
 }
@@ -3149,7 +3064,7 @@ static ssize_t proc_set_mesh_gate_timeout(struct file *file, const char __user *
 		if (num < 1)
 			goto exit;
 
-		mcfg->path_gate_timeout_factor = timeout;
+		mcfg->path_gate_timeout = timeout;
 	}
 
 exit:
@@ -3342,7 +3257,6 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 #if CONFIG_RTW_PRE_LINK_STA
 	RTW_PROC_HDL_SSEQ("pre_link_sta", proc_get_pre_link_sta, proc_set_pre_link_sta),
 #endif
-	RTW_PROC_HDL_SSEQ("ch_sel_policy", proc_get_ch_sel_policy, proc_set_ch_sel_policy),
 #ifdef CONFIG_DFS_MASTER
 	RTW_PROC_HDL_SSEQ("dfs_master_test_case", proc_get_dfs_master_test_case, proc_set_dfs_master_test_case),
 	RTW_PROC_HDL_SSEQ("update_non_ocp", NULL, proc_set_update_non_ocp),
@@ -3459,7 +3373,7 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 	RTW_PROC_HDL_SSEQ("mesh_b2u_flags", proc_get_mesh_b2u_flags, proc_set_mesh_b2u_flags),
 	#endif
 	RTW_PROC_HDL_SSEQ("mesh_stats", proc_get_mesh_stats, NULL),
-	RTW_PROC_HDL_SSEQ("mesh_gate_timeout_factor", proc_get_mesh_gate_timeout, proc_set_mesh_gate_timeout),
+	RTW_PROC_HDL_SSEQ("mesh_path_gate_timeout", proc_get_mesh_gate_timeout, proc_set_mesh_gate_timeout),
 #endif
 };
 

@@ -1623,7 +1623,7 @@ static void _config_beamformer_mu(PADAPTER adapter, struct beamformer_entry *bfe
 			csi_param, bfer->aid & 0xfff, HAL_CSI_SEG_4K,
 			bfer->mac_addr);
 
-	bf_info->cur_csi_rpt_rate = HALMAC_OFDM6;
+	bf_info->cur_csi_rpt_rate = HALMAC_OFDM54;
 	rtw_halmac_bf_cfg_sounding(adapter_to_dvobj(adapter), HAL_BFEE,
 			bf_info->cur_csi_rpt_rate);
 

@@ -226,9 +226,6 @@ struct hal_spec_t {
 	u8 port_num;
 	u8 proto_cap;	/* value of PROTO_CAP_XXX */
 	u8 wl_func;		/* value of WL_FUNC_XXX */
-
-	u8 pg_txpwr_saddr; /* starting address of PG tx power info */
-
 	u8 hci_type;	/* value of HCI Type */
 };
 

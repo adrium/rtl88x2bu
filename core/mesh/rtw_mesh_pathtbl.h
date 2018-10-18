@@ -106,7 +106,6 @@ struct rtw_mesh_path {
 	systime exp_time;
 	systime discovery_timeout;
 	systime gate_timeout;
-	u32 gate_ann_int;    /* gate announce interval */
 	u8 discovery_retries;
 	enum rtw_mesh_path_flags flags;
 	_lock state_lock;
@@ -115,7 +114,6 @@ struct rtw_mesh_path {
 	unsigned long last_preq_to_root;
 	bool is_root;
 	bool is_gate;
-	bool gate_asked;
 };
 
 /**

@@ -48,8 +48,6 @@ void rtl8822b_init_hal_spec(PADAPTER adapter)
 			    | WL_FUNC_TDLS
 			    ;
 
-	hal_spec->pg_txpwr_saddr = 0x10;
-
 	hal_spec->hci_type = 0;
 
 	rtw_macid_ctl_init_sleep_reg(adapter_to_macidctl(adapter)
@@ -245,7 +243,6 @@ void rtl8822b_init_misc(PADAPTER adapter)
 		rtw_read32(adapter, REG_FWHW_TXQ_CTRL_8822B) | BIT_EN_QUEUE_RPT_8822B(BIT(4)));
 #endif /* CONFIG_XMIT_ACK */
 
-	rtw_write8(adapter, REG_TIMER0_SRC_SEL_8822B, rtw_read8(adapter, REG_TIMER0_SRC_SEL_8822B) & ~BIT(6));
 }
 
 u32 rtl8822b_init(PADAPTER adapter)

@@ -799,8 +799,6 @@ void rtw_rfctl_init(_adapter *adapter)
 	_rtw_init_listhead(&rfctl->txpwr_lmt_list);
 #endif
 
-	rfctl->ch_sel_same_band_prefer = 1;
-
 #ifdef CONFIG_DFS_MASTER
 	rfctl->cac_start_time = rfctl->cac_end_time = RTW_CAC_STOPPED;
 
@@ -1146,9 +1144,7 @@ u32 rtw_force_stop_cac(_adapter *adapter, u32 timeout_ms)
 #endif /* CONFIG_DFS_MASTER */
 
 /* choose channel with shortest waiting (non ocp + cac) time */
-bool rtw_choose_shortest_waiting_ch(_adapter *adapter, u8 sel_ch, u8 max_bw
-	, u8 *dec_ch, u8 *dec_bw, u8 *dec_offset
-	, u8 d_flags, u8 cur_ch, u8 same_band_prefer)
+bool rtw_choose_shortest_waiting_ch(_adapter *adapter, u8 sel_ch, u8 max_bw, u8 *dec_ch, u8 *dec_bw, u8 *dec_offset, u8 d_flags)
 {
 #ifndef DBG_CHOOSE_SHORTEST_WAITING_CH
 #define DBG_CHOOSE_SHORTEST_WAITING_CH 0
@@ -1224,13 +1220,8 @@ bool rtw_choose_shortest_waiting_ch(_adapter *adapter, u8 sel_ch, u8 max_bw
 					, FUNC_ADPT_ARG(adapter), ch, bw, offset, waiting_ms, non_ocp_ms, cac_ms);
 
 			if (ch_c == 0
-				/* first: smaller wating time */
 				|| min_waiting_ms > waiting_ms
-				/* then: wider bw */
-				|| (min_waiting_ms == waiting_ms && bw > bw_c)
-				/* then: same band if requested */
-				|| (same_band_prefer && min_waiting_ms == waiting_ms && bw == bw_c
-					&& !rtw_is_same_band(cur_ch, ch_c) && rtw_is_same_band(cur_ch, ch))
+				|| (min_waiting_ms == waiting_ms && bw > bw_c) /* wider bw first */
 			) {
 				ch_c = ch;
 				bw_c = bw;
@@ -1241,9 +1232,8 @@ bool rtw_choose_shortest_waiting_ch(_adapter *adapter, u8 sel_ch, u8 max_bw
 	}
 
 	if (ch_c != 0) {
-		RTW_INFO(FUNC_ADPT_FMT": d_flags:0x%02x cur_ch:%u sb_prefer:%u %u,%u,%u waiting_ms:%u\n"
-			, FUNC_ADPT_ARG(adapter), d_flags, cur_ch, same_band_prefer
-			, ch_c, bw_c, offset_c, min_waiting_ms);
+		RTW_INFO(FUNC_ADPT_FMT": d_flags:0x%02x %u,%u,%u waiting_ms:%u\n"
+			, FUNC_ADPT_ARG(adapter), d_flags, ch_c, bw_c, offset_c, min_waiting_ms);
 
 		*dec_ch = ch_c;
 		*dec_bw = bw_c;
@@ -2459,11 +2449,9 @@ unsigned int OnBeacon(_adapter *padapter, union recv_frame *precv_frame)
 #endif
 #endif /* CONFIG_TDLS */
 
-				#ifdef CONFIG_DFS
-				process_csa_ie(padapter
-					, pframe + WLAN_HDR_A3_LEN + _BEACON_IE_OFFSET_
-					, len - (WLAN_HDR_A3_LEN + _BEACON_IE_OFFSET_));
-				#endif
+#ifdef CONFIG_DFS
+				process_csa_ie(padapter, pframe, len);	/* channel switch announcement */
+#endif /* CONFIG_DFS */
 
 #ifdef CONFIG_P2P_PS
 				process_p2p_ps_ie(padapter, (pframe + WLAN_HDR_A3_LEN), (len - WLAN_HDR_A3_LEN));
@@ -2565,14 +2553,12 @@ unsigned int OnAuth(_adapter *padapter, union recv_frame *precv_frame)
 		if (rtw_access_ctrl(padapter, get_addr2_ptr(pframe)) == _FALSE)
 			return _SUCCESS;
 		#endif
-
-		if (!rtw_mesh_plink_get(padapter, get_addr2_ptr(pframe))) {
-			if (adapter_to_rfctl(padapter)->offch_state == OFFCHS_NONE)
-				issue_probereq(padapter, &padapter->mlmepriv.cur_network.network.mesh_id, get_addr2_ptr(pframe));
-
+		#if CONFIG_RTW_MESH_CTO_MGATE_BLACKLIST
+		if (rtw_mesh_cto_mgate_required(padapter)
 			/* only peer being added (checked by notify conditions) is allowed */
+			&& !rtw_mesh_plink_get(padapter, get_addr2_ptr(pframe)))
 			return _SUCCESS;
-		}
+		#endif
 
 		rtw_cfg80211_rx_mframe(padapter, precv_frame, NULL);
 		return _SUCCESS;
@@ -3579,6 +3565,8 @@ unsigned int on_action_spct(_adapter *padapter, union recv_frame *precv_frame)
 	u8 category;
 	u8 action;
 
+	RTW_INFO(FUNC_NDEV_FMT"\n", FUNC_NDEV_ARG(padapter->pnetdev));
+
 	psta = rtw_get_stainfo(pstapriv, get_addr2_ptr(pframe));
 
 	if (!psta)
@@ -3589,9 +3577,6 @@ unsigned int on_action_spct(_adapter *padapter, union recv_frame *precv_frame)
 		goto exit;
 
 	action = frame_body[1];
-
-	RTW_INFO(FUNC_ADPT_FMT" action:%u\n", FUNC_ADPT_ARG(padapter), action);
-
 	switch (action) {
 	case RTW_WLAN_ACTION_SPCT_MSR_REQ:
 	case RTW_WLAN_ACTION_SPCT_MSR_RPRT:
@@ -3600,13 +3585,8 @@ unsigned int on_action_spct(_adapter *padapter, union recv_frame *precv_frame)
 		break;
 	case RTW_WLAN_ACTION_SPCT_CHL_SWITCH:
 #ifdef CONFIG_SPCT_CH_SWITCH
-		ret = on_action_spct_ch_switch(padapter, psta
-				, frame_body + 2, frame_len - (frame_body - pframe) - 2);
-#elif defined(CONFIG_DFS)
-		if (MLME_IS_STA(padapter) && MLME_IS_ASOC(padapter)) {
-			process_csa_ie(padapter
-				, frame_body + 2, frame_len - (frame_body - pframe) - 2);
-		}
+		ret = on_action_spct_ch_switch(padapter, psta, &frame_body[2],
+				       frame_len - (frame_body - pframe) - 2);
 #endif
 		break;
 	default:
@@ -8776,7 +8756,7 @@ void issue_probersp(_adapter *padapter, unsigned char *da, u8 is_valid_p2p_probe
 
 }
 
-int _issue_probereq(_adapter *padapter, const NDIS_802_11_SSID *pssid, const u8 *da, u8 ch, bool append_wps, int wait_ack)
+int _issue_probereq(_adapter *padapter, NDIS_802_11_SSID *pssid, u8 *da, u8 ch, bool append_wps, int wait_ack)
 {
 	int ret = _FAIL;
 	struct xmit_frame		*pmgntframe;
@@ -8886,7 +8866,7 @@ exit:
 	return ret;
 }
 
-inline void issue_probereq(_adapter *padapter, const NDIS_802_11_SSID *pssid, const u8 *da)
+inline void issue_probereq(_adapter *padapter, NDIS_802_11_SSID *pssid, u8 *da)
 {
 	_issue_probereq(padapter, pssid, da, 0, 1, _FALSE);
 }
@@ -8896,7 +8876,7 @@ inline void issue_probereq(_adapter *padapter, const NDIS_802_11_SSID *pssid, co
  * wait_ms > 0 means you want to wait ack through C2H_CCX_TX_RPT, and the value of wait_ms means the interval between each TX
  * try_cnt means the maximal TX count to try
  */
-int issue_probereq_ex(_adapter *padapter, const NDIS_802_11_SSID *pssid, const u8 *da, u8 ch, bool append_wps,
+int issue_probereq_ex(_adapter *padapter, NDIS_802_11_SSID *pssid, u8 *da, u8 ch, bool append_wps,
 		      int try_cnt, int wait_ms)
 {
 	int ret = _FAIL;

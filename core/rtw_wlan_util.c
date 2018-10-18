@@ -2636,17 +2636,20 @@ void update_beacon_info(_adapter *padapter, u8 *pframe, uint pkt_len, struct sta
 }
 
 #ifdef CONFIG_DFS
-void process_csa_ie(_adapter *padapter, u8 *ies, uint ies_len)
+void process_csa_ie(_adapter *padapter, u8 *pframe, uint pkt_len)
 {
 	unsigned int i;
+	unsigned int len;
 	PNDIS_802_11_VARIABLE_IEs	pIE;
 	u8 new_ch_no = 0;
 
 	if (padapter->mlmepriv.handle_dfs == _TRUE)
 		return;
 
-	for (i = 0; i + 1 < ies_len;) {
-		pIE = (PNDIS_802_11_VARIABLE_IEs)(ies + i);
+	len = pkt_len - (_BEACON_IE_OFFSET_ + WLAN_HDR_A3_LEN);
+
+	for (i = 0; i < len;) {
+		pIE = (PNDIS_802_11_VARIABLE_IEs)(pframe + (_BEACON_IE_OFFSET_ + WLAN_HDR_A3_LEN) + i);
 
 		switch (pIE->ElementID) {
 		case _CH_SWTICH_ANNOUNCE_:

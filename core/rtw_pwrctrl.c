@@ -192,6 +192,9 @@ bool rtw_pwr_unassociated_idle(_adapter *adapter)
 	struct mlme_priv *pmlmepriv;
 #ifdef CONFIG_P2P
 	struct wifidirect_info	*pwdinfo;
+#ifdef CONFIG_IOCTL_CFG80211
+	struct cfg80211_wifidirect_info *pcfg80211_wdinfo;
+#endif
 #endif
 
 	bool ret = _FALSE;
@@ -212,6 +215,9 @@ bool rtw_pwr_unassociated_idle(_adapter *adapter)
 			pmlmepriv = &(iface->mlmepriv);
 #ifdef CONFIG_P2P
 			pwdinfo = &(iface->wdinfo);
+#ifdef CONFIG_IOCTL_CFG80211
+			pcfg80211_wdinfo = &iface->cfg80211_wdinfo;
+#endif
 #endif
 			if (check_fwstate(pmlmepriv, WIFI_ASOC_STATE | WIFI_SITE_MONITOR)
 				|| check_fwstate(pmlmepriv, WIFI_UNDER_LINKING | WIFI_UNDER_WPS)
@@ -220,11 +226,12 @@ bool rtw_pwr_unassociated_idle(_adapter *adapter)
 				|| check_fwstate(pmlmepriv, WIFI_ADHOC_MASTER_STATE | WIFI_ADHOC_STATE)
 				#if defined(CONFIG_P2P) && defined(CONFIG_IOCTL_CFG80211)
 				|| rtw_cfg80211_get_is_roch(iface) == _TRUE
-				|| (rtw_cfg80211_is_ro_ch_once(adapter)
-					&& rtw_cfg80211_get_last_ro_ch_passing_ms(adapter) < 3000)
 				#elif defined(CONFIG_P2P)
 				|| rtw_p2p_chk_state(pwdinfo, P2P_STATE_IDLE)
 				|| rtw_p2p_chk_state(pwdinfo, P2P_STATE_LISTEN)
+				#endif
+				#if defined(CONFIG_P2P) && defined(CONFIG_IOCTL_CFG80211)
+				|| rtw_get_passing_time_ms(pcfg80211_wdinfo->last_ro_ch_time) < 3000
 				#endif
 			)
 				goto exit;

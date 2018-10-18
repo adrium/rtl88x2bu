@@ -71,8 +71,8 @@
 #endif
 
 #ifdef CONFIG_RTW_MESH
-	#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0))
-		#error "CONFIG_RTW_MESH can't be enabled when kernel < 3.10.0\n"
+	#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 11, 0))
+		#error "CONFIG_RTW_MESH can't be enabled when kernel < 3.11.0\n"
 	#endif
 #endif
 
@@ -280,9 +280,6 @@ void rtw_cfg80211_indicate_sta_disassoc(_adapter *padapter, const u8 *da, unsign
 #ifdef CONFIG_P2P
 void rtw_cfg80211_set_is_roch(_adapter *adapter, bool val);
 bool rtw_cfg80211_get_is_roch(_adapter *adapter);
-bool rtw_cfg80211_is_ro_ch_once(_adapter *adapter);
-void rtw_cfg80211_set_last_ro_ch_time(_adapter *adapter);
-s32 rtw_cfg80211_get_last_ro_ch_passing_ms(_adapter *adapter);
 
 int rtw_cfg80211_iface_has_p2p_group_cap(_adapter *adapter);
 int rtw_cfg80211_is_p2p_scan(_adapter *adapter);

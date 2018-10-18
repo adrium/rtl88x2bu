@@ -4188,8 +4188,6 @@ bool rtw_ap_chbw_decision(_adapter *adapter, s16 req_ch, s8 req_bw, s8 req_offse
 			  , u8 *ch, u8 *bw, u8 *offset, u8 *chbw_allow)
 {
 	RT_CHANNEL_INFO *chset = adapter_to_chset(adapter);
-	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
-	bool ch_avail = _FALSE;
 	u8 cur_ie_ch, cur_ie_bw, cur_ie_offset;
 	u8 dec_ch, dec_bw, dec_offset;
 	u8 u_ch = 0, u_offset, u_bw;
@@ -4372,51 +4370,24 @@ choose_chbw:
 
 #if defined(CONFIG_DFS_MASTER)
 		if (!rtw_odm_dfs_domain_unknown(adapter)) {
-			if (rfctl->dbg_dfs_master_choose_dfs_ch_first) {
-				ch_avail = rtw_choose_shortest_waiting_ch(adapter, req_ch, req_bw
-							, &dec_ch, &dec_bw, &dec_offset
-							, RTW_CHF_2G | RTW_CHF_NON_DFS, mlmeext->cur_channel
-							, rfctl->ch_sel_same_band_prefer);
-				if (ch_avail == _TRUE) {
-					RTW_INFO(FUNC_ADPT_FMT" choose 5G DFS channel for debug\n", FUNC_ADPT_ARG(adapter));
-					goto update_bss_chbw;
-				}
-			}
-
-			if (rfctl->dfs_ch_sel_d_flags) {
-				ch_avail = rtw_choose_shortest_waiting_ch(adapter, req_ch, req_bw
-							, &dec_ch, &dec_bw, &dec_offset
-							, rfctl->dfs_ch_sel_d_flags, mlmeext->cur_channel
-							, rfctl->ch_sel_same_band_prefer);
-				if (ch_avail == _TRUE) {
-					RTW_INFO(FUNC_ADPT_FMT" choose with dfs_ch_sel_d_flags:0x%02x for debug\n"
-						, FUNC_ADPT_ARG(adapter), rfctl->dfs_ch_sel_d_flags);
-					goto update_bss_chbw;
-				}
-			}
-
-			ch_avail = rtw_choose_shortest_waiting_ch(adapter, req_ch, req_bw
-						, &dec_ch, &dec_bw, &dec_offset
-						, 0, mlmeext->cur_channel
-						, rfctl->ch_sel_same_band_prefer);
-			if (ch_avail == _FALSE) {
+			/* choose 5G DFS channel for debug */
+			if (adapter_to_rfctl(adapter)->dbg_dfs_master_choose_dfs_ch_first
+				&& rtw_choose_shortest_waiting_ch(adapter, req_ch, req_bw, &dec_ch, &dec_bw, &dec_offset, RTW_CHF_2G | RTW_CHF_NON_DFS) == _TRUE)
+				RTW_INFO(FUNC_ADPT_FMT" choose 5G DFS channel for debug\n", FUNC_ADPT_ARG(adapter));
+			else if (adapter_to_rfctl(adapter)->dfs_ch_sel_d_flags
+				&& rtw_choose_shortest_waiting_ch(adapter, req_ch, req_bw, &dec_ch, &dec_bw, &dec_offset, adapter_to_rfctl(adapter)->dfs_ch_sel_d_flags) == _TRUE)
+				RTW_INFO(FUNC_ADPT_FMT" choose with dfs_ch_sel_d_flags:0x%02x for debug\n", FUNC_ADPT_ARG(adapter), adapter_to_rfctl(adapter)->dfs_ch_sel_d_flags);
+			else if (rtw_choose_shortest_waiting_ch(adapter, req_ch, req_bw, &dec_ch, &dec_bw, &dec_offset, 0) == _FALSE) {
 				RTW_WARN(FUNC_ADPT_FMT" no available channel\n", FUNC_ADPT_ARG(adapter));
 				*chbw_allow = _FALSE;
 				goto exit;
 			}
-
 		} else
 #endif /* defined(CONFIG_DFS_MASTER) */
-		{
-			ch_avail = rtw_choose_shortest_waiting_ch(adapter, req_ch, req_bw
-						, &dec_ch, &dec_bw, &dec_offset
-						, RTW_CHF_DFS, MLME_IS_ASOC(adapter) ? mlmeext->cur_channel : cur_ie_ch
-						, rfctl->ch_sel_same_band_prefer);
-			if (ch_avail == _FALSE) {
-				RTW_WARN(FUNC_ADPT_FMT" no available channel\n", FUNC_ADPT_ARG(adapter));
-				*chbw_allow = _FALSE;
-				goto exit;
-			}
+		if (rtw_choose_shortest_waiting_ch(adapter, req_ch, req_bw, &dec_ch, &dec_bw, &dec_offset, RTW_CHF_DFS) == _FALSE) {
+			RTW_WARN(FUNC_ADPT_FMT" no available channel\n", FUNC_ADPT_ARG(adapter));
+			*chbw_allow = _FALSE;
+			goto exit;
 		}
 
 update_bss_chbw:

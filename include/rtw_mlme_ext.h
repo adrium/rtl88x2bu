@@ -532,9 +532,7 @@ enum {
 	RTW_CHF_NON_OCP = BIT6,
 };
 
-bool rtw_choose_shortest_waiting_ch(_adapter *adapter, u8 sel_ch, u8 max_bw
-	, u8 *dec_ch, u8 *dec_bw, u8 *dec_offset
-	, u8 d_flags, u8 cur_ch, u8 same_band_prefer);
+bool rtw_choose_shortest_waiting_ch(_adapter *adapter, u8 sel_ch, u8 max_bw, u8 *dec_ch, u8 *dec_bw, u8 *dec_offset, u8 d_flags);
 
 void dump_country_chplan(void *sel, const struct country_chplan *ent);
 void dump_country_chplan_map(void *sel);
@@ -823,7 +821,7 @@ void rtw_dump_bcn_keys(struct beacon_keys *recv_beacon);
 int rtw_check_bcn_info(ADAPTER *Adapter, u8 *pframe, u32 packet_len);
 void update_beacon_info(_adapter *padapter, u8 *pframe, uint len, struct sta_info *psta);
 #ifdef CONFIG_DFS
-void process_csa_ie(_adapter *padapter, u8 *ies, uint ies_len);
+void process_csa_ie(_adapter *padapter, u8 *pframe, uint len);
 #endif /* CONFIG_DFS */
 void update_capinfo(PADAPTER Adapter, u16 updateCap);
 void update_wireless_mode(_adapter *padapter);
@@ -944,8 +942,8 @@ void issue_assocreq(_adapter *padapter);
 void issue_reassocreq(_adapter *padapter);
 void issue_asocrsp(_adapter *padapter, unsigned short status, struct sta_info *pstat, int pkt_type);
 void issue_auth(_adapter *padapter, struct sta_info *psta, unsigned short status);
-void issue_probereq(_adapter *padapter, const NDIS_802_11_SSID *pssid, const u8 *da);
-s32 issue_probereq_ex(_adapter *padapter, const NDIS_802_11_SSID *pssid, const u8 *da, u8 ch, bool append_wps, int try_cnt, int wait_ms);
+void issue_probereq(_adapter *padapter, NDIS_802_11_SSID *pssid, u8 *da);
+s32 issue_probereq_ex(_adapter *padapter, NDIS_802_11_SSID *pssid, u8 *da, u8 ch, bool append_wps, int try_cnt, int wait_ms);
 int issue_nulldata(_adapter *padapter, unsigned char *da, unsigned int power_mode, int try_cnt, int wait_ms);
 int issue_qos_nulldata(_adapter *padapter, unsigned char *da, u16 tid, u8 ps, int try_cnt, int wait_ms);
 int issue_deauth(_adapter *padapter, unsigned char *da, unsigned short reason);

@@ -214,7 +214,7 @@ enum bt_8822b_2ant_Scoreboard {
 	BT_8822B_2ANT_SCOREBOARD_RXGAIN								= BIT(4),
 	BT_8822B_2ANT_SCOREBOARD_WLBUSY								= BIT(6),
 	BT_8822B_2ANT_SCOREBOARD_EXTFEM								= BIT(8),
-	BT_8822B_2ANT_SCOREBOARD_BTCQDDR							= BIT(10)
+	BT_8822B_2ANT_SCOREBOARD_CQDDR								= BIT(10)
 };
 
 
@@ -424,7 +424,7 @@ struct coex_sta_8822b_2ant {
 	u16					le_forbidden_slot;
 	u8					bt_a2dp_vendor_id;
 	u32					bt_a2dp_device_name;
-	boolean				is_ble_scan_en;
+	boolean				is_ble_scan_toggle;
 
 	boolean				is_bt_opp_exist;
 	boolean				gl_wifi_busy;
